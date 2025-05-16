@@ -10,8 +10,6 @@ variables:
 - group: zipdeploy-secrets
 - name: azureWebAppName
   value: 'rymecdemo'
-- name: jarName
-  value: 'java_app_service-0.0.1-SNAPSHOT.jar'
 - name: zipPath
   value: '$(Build.ArtifactStagingDirectory)/app.zip'
 
@@ -24,18 +22,11 @@ steps:
     options: '--no-daemon'
 
 - task: CopyFiles@2
-  displayName: '📦 Copy JAR to Staging Directory'
+  displayName: '📦 Copy app.jar to Staging Directory'
   inputs:
-    contents: '**/build/libs/$(jarName)'
+    contents: '**/build/libs/app.jar'
     targetFolder: '$(Build.ArtifactStagingDirectory)'
-
-- task: Bash@3
-  displayName: '🎯 Rename JAR to app.jar'
-  inputs:
-    targetType: 'inline'
-    script: |
-      echo "Renaming $(jarName) to app.jar"
-      mv "$(Build.ArtifactStagingDirectory)/$(jarName)" "$(Build.ArtifactStagingDirectory)/app.jar"
+    flattenFolders: true
 
 - task: ArchiveFiles@2
   displayName: '📁 Archive app.jar'
