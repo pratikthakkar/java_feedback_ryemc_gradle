@@ -44,6 +44,7 @@ steps:
     script: |
       echo "🚀 Deploying to https://$(azureWebAppName).scm.azurewebsites.net/api/zipdeploy"
       curl -X POST \
-        -u "$(DEPLOY_USER):$(DEPLOY_PASSWORD)" \
-        --data-binary "@$(zipPath)" \
-        "https://$(azureWebAppName).scm.azurewebsites.net/api/zipdeploy"
+      -u "$(DEPLOY_USER):$(DEPLOY_PASSWORD)" \
+      --data-binary "@$(zipPath)" \
+      "https://rymec-demo-app-d6h5gmc9crhnc5g7.scm.centralus-01.azurewebsites.net/api/zipdeploy"
+
