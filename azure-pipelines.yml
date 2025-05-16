@@ -7,11 +7,11 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-- group: zipdeploy-secrets  # 👈 contains DEPLOY_USER and DEPLOY_PASSWORD
+- group: zipdeploy-secrets
 - name: azureWebAppName
   value: 'rymecdemo'
-- name: jarPattern
-  value: '**/build/libs/*.jar'
+- name: jarName
+  value: 'java_app_service-0.0.1-SNAPSHOT.jar'
 - name: zipPath
   value: '$(Build.ArtifactStagingDirectory)/app.zip'
 
@@ -26,13 +26,21 @@ steps:
 - task: CopyFiles@2
   displayName: '📦 Copy JAR to Staging Directory'
   inputs:
-    contents: '$(jarPattern)'
+    contents: '**/build/libs/$(jarName)'
     targetFolder: '$(Build.ArtifactStagingDirectory)'
 
-- task: ArchiveFiles@2
-  displayName: '📁 Archive JAR File'
+- task: Bash@3
+  displayName: '🎯 Rename JAR to app.jar'
   inputs:
-    rootFolderOrFile: '$(Build.ArtifactStagingDirectory)'
+    targetType: 'inline'
+    script: |
+      echo "Renaming $(jarName) to app.jar"
+      mv "$(Build.ArtifactStagingDirectory)/$(jarName)" "$(Build.ArtifactStagingDirectory)/app.jar"
+
+- task: ArchiveFiles@2
+  displayName: '📁 Archive app.jar'
+  inputs:
+    rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/app.jar'
     includeRootFolder: false
     archiveType: 'zip'
     archiveFile: '$(zipPath)'
@@ -43,8 +51,8 @@ steps:
   inputs:
     targetType: 'inline'
     script: |
-      echo "🚀 Deploying to https://rymecdemo.scm.azurewebsites.net/api/zipdeploy"
+      echo "🚀 Deploying to https://$(azureWebAppName).scm.azurewebsites.net/api/zipdeploy"
       curl -X POST \
         -u "$(DEPLOY_USER):$(DEPLOY_PASSWORD)" \
         --data-binary "@$(zipPath)" \
-        "https://rymecdemo.scm.azurewebsites.net/api/zipdeploy"
+        "https://$(azureWebAppName).scm.azurewebsites.net/api/zipdeploy"
