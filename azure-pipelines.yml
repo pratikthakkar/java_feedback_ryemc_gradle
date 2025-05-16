@@ -1,0 +1,49 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureWebAppName: 'your-app-service-name'              # Replace this
+  azureSubscription: 'your-service-connection-name'     # Replace this
+  jarPattern: '**/build/libs/*.jar'
+
+steps:
+- task: Gradle@2
+  displayName: '🔨 Build Spring Boot App'
+  inputs:
+    gradleWrapperFile: 'gradlew'
+    tasks: 'clean build'
+    options: '--no-daemon'
+
+- task: CopyFiles@2
+  displayName: '📦 Copy JAR to Staging Directory'
+  inputs:
+    contents: '$(jarPattern)'
+    targetFolder: '$(Build.ArtifactStagingDirectory)'
+
+- task: ArchiveFiles@2
+  displayName: '📁 Archive JAR File'
+  inputs:
+    rootFolderOrFile: '$(Build.ArtifactStagingDirectory)'
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+    replaceExistingArchive: true
+
+- task: PublishBuildArtifacts@1
+  displayName: '🚀 Publish Artifacts'
+  inputs:
+    PathtoPublish: '$(Build.ArtifactStagingDirectory)/app.zip'
+    ArtifactName: 'drop'
+    publishLocation: 'Container'
+
+- task: AzureWebApp@1
+  displayName: '🌐 Deploy to Azure App Service'
+  inputs:
+    azureSubscription: '$(azureSubscription)'
+    appName: '$(azureWebAppName)'
+    package: '$(Build.ArtifactStagingDirectory)/app.zip'
