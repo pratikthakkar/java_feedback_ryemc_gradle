@@ -7,14 +7,14 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-- group: zipdeploy-secrets
+- group: zipdeploy-secrets    # DEPLOY_USER="$rymec-demo-app", DEPLOY_PASSWORD="…"
 - name: scmHost
   value: 'rymec-demo-app-d6h5gmc9crhnc5g7.scm.centralus-01.azurewebsites.net'
 - name: zipPath
   value: '$(Build.ArtifactStagingDirectory)/app.zip'
 
 steps:
-# 1) Build fat-jar
+# 1) Build your fat-jar
 - task: Gradle@2
   displayName: '🔨 Build Spring Boot fat-jar'
   inputs:
@@ -22,13 +22,13 @@ steps:
     tasks: 'clean bootJar'
     options: '--no-daemon'
 
-# 1.1) DEBUG: list what's in build/libs
+# 1.1) DEBUG: Show what was built
 - script: |
     echo "🔍 build/libs contents:"
     ls -lh build/libs
-  displayName: '🔍 Verify build output'
+  displayName: '🔍 Verify build/libs'
 
-# 2) Copy to staging
+# 2) Copy it into staging
 - task: CopyFiles@2
   displayName: '📦 Copy app.jar → staging'
   inputs:
@@ -36,13 +36,13 @@ steps:
     targetFolder: '$(Build.ArtifactStagingDirectory)'
     flattenFolders: true
 
-# 2.1) DEBUG: list staging dir
+# 2.1) DEBUG: Show staging dir
 - script: |
-    echo "🔍 staging directory contents:"
+    echo "🔍 staging contents:"
     ls -lh $(Build.ArtifactStagingDirectory)
   displayName: '🔍 Verify staging'
 
-# 3) Archive
+# 3) Zip it
 - task: ArchiveFiles@2
   displayName: '📁 Archive app.jar → app.zip'
   inputs:
@@ -52,23 +52,22 @@ steps:
     archiveFile: '$(zipPath)'
     replaceExistingArchive: true
 
-# 3.1) DEBUG: inspect the ZIP
+# 3.1) DEBUG: Inspect the ZIP
 - script: |
-    echo "🔍 ZIP contents:"
+    echo "🔍 app.zip contains:"
     unzip -l $(zipPath)
-  displayName: '🔍 Inspect ZIP'
+  displayName: '🔍 Inspect app.zip'
 
-# 4) Deploy
+# 4) Deploy via the exact same curl you ran locally
 - task: Bash@3
-  displayName: '🚀 Deploy via ZipDeploy'
+  displayName: '🚀 ZipDeploy (regional SCM host)'
   inputs:
     targetType: 'inline'
     script: |
       echo "Deploying to https://$(scmHost)/api/zipdeploy"
-      AUTH=$(printf '%s:%s' "$DEPLOY_USER" "$DEPLOY_PASSWORD" | base64)
       curl -v -X POST \
-        -H "Authorization: Basic $AUTH" \
-        -H "Content-Type: application/zip" \
+        -u '$(DEPLOY_USER):$(DEPLOY_PASSWORD)' \
+        -H 'Content-Type: application/zip' \
+        -H 'Expect:' \
         --data-binary "@$(zipPath)" \
         "https://$(scmHost)/api/zipdeploy"
-
