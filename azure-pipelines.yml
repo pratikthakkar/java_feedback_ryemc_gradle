@@ -50,7 +50,9 @@ steps:
     targetType: 'inline'
     script: |
       echo "Deploying to https://$(scmHost)/api/zipdeploy"
-      curl -f -X POST \
-        -u "$(DEPLOY_USER):$(DEPLOY_PASSWORD)" \
+      # build a Base64 “user:pass” string so the leading ‘$’ is preserved
+      AUTH=$(printf '%s:%s' "$DEPLOY_USER" "$DEPLOY_PASSWORD" | base64)
+      curl -v -X POST \
+        -H "Authorization: Basic $AUTH" \
         --data-binary "@$(zipPath)" \
         "https://$(scmHost)/api/zipdeploy"
