@@ -7,9 +7,13 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-  azureWebAppName: 'your-app-service-name'              # Replace this
-  azureSubscription: 'your-service-connection-name'     # Replace this
-  jarPattern: '**/build/libs/*.jar'
+- group: zipdeploy-secrets  # 👈 contains DEPLOY_USER and DEPLOY_PASSWORD
+- name: azureWebAppName
+  value: 'rymecdemo'
+- name: jarPattern
+  value: '**/build/libs/*.jar'
+- name: zipPath
+  value: '$(Build.ArtifactStagingDirectory)/app.zip'
 
 steps:
 - task: Gradle@2
@@ -31,19 +35,16 @@ steps:
     rootFolderOrFile: '$(Build.ArtifactStagingDirectory)'
     includeRootFolder: false
     archiveType: 'zip'
-    archiveFile: '$(Build.ArtifactStagingDirectory)/app.zip'
+    archiveFile: '$(zipPath)'
     replaceExistingArchive: true
 
-- task: PublishBuildArtifacts@1
-  displayName: '🚀 Publish Artifacts'
+- task: Bash@3
+  displayName: '🌐 Deploy to Azure App Service using ZipDeploy'
   inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)/app.zip'
-    ArtifactName: 'drop'
-    publishLocation: 'Container'
-
-- task: AzureWebApp@1
-  displayName: '🌐 Deploy to Azure App Service'
-  inputs:
-    azureSubscription: '$(azureSubscription)'
-    appName: '$(azureWebAppName)'
-    package: '$(Build.ArtifactStagingDirectory)/app.zip'
+    targetType: 'inline'
+    script: |
+      echo "🚀 Deploying to https://rymecdemo.scm.azurewebsites.net/api/zipdeploy"
+      curl -X POST \
+        -u "$(DEPLOY_USER):$(DEPLOY_PASSWORD)" \
+        --data-binary "@$(zipPath)" \
+        "https://rymecdemo.scm.azurewebsites.net/api/zipdeploy"
