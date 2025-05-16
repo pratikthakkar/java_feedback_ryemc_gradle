@@ -7,32 +7,35 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-- group: zipdeploy-secrets  # Must contain DEPLOY_USER and DEPLOY_PASSWORD
-- name: azureWebAppName
-  value: 'rymec-demo-app-d6h5gmc9crhnc5g7'  # Full SCM host part, consistent with deployment
+  # these two come from your publish-profile and must live in a secret variable group
+- group: zipdeploy-secrets  
+  # path to the ZIP we’ll create
 - name: zipPath
   value: '$(Build.ArtifactStagingDirectory)/app.zip'
+  # your full Kudu/SCM URL from the publish profile, without “https://” or “/api/zipdeploy”
+- name: scmHost
+  value: 'rymec-demo-app-d6h5gmc9crhnc5g7.scm.centralus-01.azurewebsites.net'
 
 steps:
-# 🔨 Build Spring Boot app
+# 1) Build the Spring Boot executable JAR
 - task: Gradle@2
-  displayName: '🔨 Build Spring Boot App'
+  displayName: '🔨 Build Spring Boot fat-jar'
   inputs:
     gradleWrapperFile: 'gradlew'
-    tasks: 'clean bootJar'
+    tasks: 'clean bootJar'        # bootJar generates your 50 MB app.jar
     options: '--no-daemon'
 
-# 📦 Copy app.jar to staging
+# 2) Copy the one and only fat-jar into staging
 - task: CopyFiles@2
-  displayName: '📦 Copy app.jar to Staging Directory'
+  displayName: '📦 Copy app.jar → staging'
   inputs:
     contents: '**/build/libs/app.jar'
     targetFolder: '$(Build.ArtifactStagingDirectory)'
     flattenFolders: true
 
-# 📁 Archive app.jar to app.zip
+# 3) Zip it (must contain app.jar at the root of the ZIP)
 - task: ArchiveFiles@2
-  displayName: '📁 Archive app.jar'
+  displayName: '📁 Archive app.jar → app.zip'
   inputs:
     rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/app.jar'
     includeRootFolder: false
@@ -40,14 +43,14 @@ steps:
     archiveFile: '$(zipPath)'
     replaceExistingArchive: true
 
-# 🚀 Deploy to Azure App Service using ZipDeploy
+# 4) Curl the ZIP up to the *exact* Kudu endpoint from your publish profile
 - task: Bash@3
-  displayName: '🌐 Deploy to Azure App Service using ZipDeploy'
+  displayName: '🚀 Deploy via ZipDeploy'
   inputs:
     targetType: 'inline'
     script: |
-      echo "🚀 Deploying to https://$(azureWebAppName).scm.azurewebsites.net/api/zipdeploy"
-      curl -X POST \
+      echo "Deploying to https://$(scmHost)/api/zipdeploy"
+      curl -f -X POST \
         -u "$(DEPLOY_USER):$(DEPLOY_PASSWORD)" \
         --data-binary "@$(zipPath)" \
-        "https://$(azureWebAppName).scm.azurewebsites.net/api/zipdeploy"
+        "https://$(scmHost)/api/zipdeploy"
