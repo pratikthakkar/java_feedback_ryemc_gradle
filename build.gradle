@@ -32,5 +32,6 @@ test {
 }
 
 bootJar {
+    launchScript()
     archiveFileName = 'app.jar'
 }
