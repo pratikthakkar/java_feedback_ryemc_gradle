@@ -1,63 +1,3 @@
-# trigger:
-#   branches:
-#     include:
-#       - main
-
-# pool:
-#   vmImage: 'ubuntu-latest'
-
-# variables:
-#   # these two come from your publish-profile and must live in a secret variable group
-# - group: zipdeploy-secrets  
-#   # path to the ZIP we’ll create
-# - name: zipPath
-#   value: '$(Build.ArtifactStagingDirectory)/app.zip'
-#   # your full Kudu/SCM URL from the publish profile, without “https://” or “/api/zipdeploy”
-# - name: scmHost
-#   value: 'rymec-demo-app-d6h5gmc9crhnc5g7.scm.centralus-01.azurewebsites.net'
-
-# steps:
-# # 1) Build the Spring Boot executable JAR
-# - task: Gradle@2
-#   displayName: '🔨 Build Spring Boot fat-jar'
-#   inputs:
-#     gradleWrapperFile: 'gradlew'
-#     tasks: 'clean bootJar'        # bootJar generates your 50 MB app.jar
-#     options: '--no-daemon'
-
-# # 2) Copy the one and only fat-jar into staging
-# - task: CopyFiles@2
-#   displayName: '📦 Copy app.jar → staging'
-#   inputs:
-#     contents: '**/build/libs/app.jar'
-#     targetFolder: '$(Build.ArtifactStagingDirectory)'
-#     flattenFolders: true
-
-# # 3) Zip it (must contain app.jar at the root of the ZIP)
-# - task: ArchiveFiles@2
-#   displayName: '📁 Archive app.jar → app.zip'
-#   inputs:
-#     rootFolderOrFile: '$(Build.ArtifactStagingDirectory)/app.jar'
-#     includeRootFolder: false
-#     archiveType: 'zip'
-#     archiveFile: '$(zipPath)'
-#     replaceExistingArchive: true
-
-# # 4) Curl the ZIP up to the *exact* Kudu endpoint from your publish profile
-# - task: Bash@3
-#   displayName: '🚀 Deploy via ZipDeploy'
-#   inputs:
-#     targetType: 'inline'
-#     script: |
-#       echo "Deploying to https://$(scmHost)/api/zipdeploy"
-#       # build a Base64 “user:pass” string so the leading ‘$’ is preserved
-#       AUTH=$(printf '%s:%s' "$DEPLOY_USER" "$DEPLOY_PASSWORD" | base64)
-#       curl -v -X POST \
-#         -H "Authorization: Basic $AUTH" \
-#         --data-binary "@$(zipPath)" \
-#         "https://$(scmHost)/api/zipdeploy"
-
-
 trigger:
   branches:
     include:
@@ -67,27 +7,14 @@ pool:
   vmImage: 'ubuntu-latest'
 
 variables:
-- group: zipdeploy-secrets           # contains DEPLOY_USER, DEPLOY_PASSWORD
-- name: resourceGroup
-  value: 'pratik'                    # your RG
-- name: appName
-  value: 'rymec-demo-app'            # your App Service name
+- group: zipdeploy-secrets
 - name: scmHost
   value: 'rymec-demo-app-d6h5gmc9crhnc5g7.scm.centralus-01.azurewebsites.net'
 - name: zipPath
   value: '$(Build.ArtifactStagingDirectory)/app.zip'
-- name: azureSubscription
-  value: 'YourServiceConnection'     # replace with your Azure DevOps service connection name
 
 steps:
-# ✨ 0) Ensure a clean slate
-- script: |
-    echo "🧹 Cleaning workspace and staging directory"
-    rm -rf $(Build.SourcesDirectory)/build
-    rm -rf $(Build.ArtifactStagingDirectory)/*
-  displayName: '🧹 Clean workspace'
-
-# 1) Build the fat-jar
+# 1) Build fat-jar
 - task: Gradle@2
   displayName: '🔨 Build Spring Boot fat-jar'
   inputs:
@@ -95,27 +22,27 @@ steps:
     tasks: 'clean bootJar'
     options: '--no-daemon'
 
-# 1.1) Debug: verify the JAR was just built
+# 1.1) DEBUG: list what's in build/libs
 - script: |
     echo "🔍 build/libs contents:"
     ls -lh build/libs
   displayName: '🔍 Verify build output'
 
-# 2) Copy into staging
+# 2) Copy to staging
 - task: CopyFiles@2
-  displayName: '📦 Copy app.jar to staging'
+  displayName: '📦 Copy app.jar → staging'
   inputs:
     contents: 'build/libs/app.jar'
     targetFolder: '$(Build.ArtifactStagingDirectory)'
     flattenFolders: true
 
-# 2.1) Debug: verify staging dir
+# 2.1) DEBUG: list staging dir
 - script: |
-    echo "🔍 Staging directory contents:"
+    echo "🔍 staging directory contents:"
     ls -lh $(Build.ArtifactStagingDirectory)
   displayName: '🔍 Verify staging'
 
-# 3) Zip it
+# 3) Archive
 - task: ArchiveFiles@2
   displayName: '📁 Archive app.jar → app.zip'
   inputs:
@@ -125,47 +52,20 @@ steps:
     archiveFile: '$(zipPath)'
     replaceExistingArchive: true
 
-# 3.1) Debug: inspect the ZIP
+# 3.1) DEBUG: inspect the ZIP
 - script: |
     echo "🔍 ZIP contents:"
     unzip -l $(zipPath)
   displayName: '🔍 Inspect ZIP'
 
-# 4) Deploy via ZipDeploy
+# 4) Deploy
 - task: Bash@3
   displayName: '🚀 Deploy via ZipDeploy'
   inputs:
     targetType: 'inline'
     script: |
-      echo "Deploying to https://$(scmHost)/api/zipdeploy"
       AUTH=$(printf '%s:%s' "$DEPLOY_USER" "$DEPLOY_PASSWORD" | base64)
       curl -f -X POST \
         -H "Authorization: Basic $AUTH" \
         --data-binary "@$(zipPath)" \
         "https://$(scmHost)/api/zipdeploy"
-
-# 5) Remove any Run-From-Package lock so your new ZIP is used immediately
-- task: AzureCLI@2
-  displayName: '🚧 Disable Run-From-Package'
-  inputs:
-    azureSubscription: '$(azureSubscription)'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      az webapp config appsettings delete \
-        --name $(appName) \
-        --resource-group $(resourceGroup) \
-        --setting-names WEBSITE_RUN_FROM_PACKAGE || echo "No Run-From-Package setting to delete"
-
-# 6) Restart the App Service to pick up the new JAR
-- task: AzureCLI@2
-  displayName: '🔄 Restart App Service'
-  inputs:
-    azureSubscription: '$(azureSubscription)'
-    scriptType: bash
-    scriptLocation: inlineScript
-    inlineScript: |
-      echo "Restarting $(appName)..."
-      az webapp restart \
-        --name $(appName) \
-        --resource-group $(resourceGroup)
